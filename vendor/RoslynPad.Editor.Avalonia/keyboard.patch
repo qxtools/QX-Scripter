@@ -11,3 +11,43 @@ index c330967..ad53847 100644
  
          _searchReplacePanel = SearchPanel.Install(this);
      }
+diff --git a/src/RoslynPad.Editor.Windows/Shared/RoslynCodeEditor.cs b/src/RoslynPad.Editor.Windows/Shared/RoslynCodeEditor.cs
+index f10ef7f..bd44021 100644
+--- a/src/RoslynPad.Editor.Windows/Shared/RoslynCodeEditor.cs
++++ b/src/RoslynPad.Editor.Windows/Shared/RoslynCodeEditor.cs
+@@ -30,8 +30,13 @@ public class RoslynCodeEditor : CodeTextEditor
+     private ICodeFormattingService? _codeFormattingService;
+     private SnippetManager? _snippetManager;
+ 
+-    public RoslynCodeEditor()
++    public RoslynCodeEditor() : this(new TextDocument())
+     {
++    }
++
++    public RoslynCodeEditor(TextDocument document)
++    {
++        Document = document ?? throw new ArgumentNullException(nameof(document));
+         _textMarkerService = new TextMarkerService(this);
+         TextArea.TextView.BackgroundRenderers.Add(_textMarkerService);
+         TextArea.TextView.LineTransformers.Add(_textMarkerService);
+@@ -129,7 +134,7 @@ public class RoslynCodeEditor : CodeTextEditor
+         RaiseEvent(e);
+     }
+ 
+-    public async ValueTask<DocumentId> InitializeAsync(IRoslynHost roslynHost, IClassificationHighlightColors highlightColors, string workingDirectory, string documentText, SourceCodeKind sourceCodeKind)
++    public async ValueTask<DocumentId> InitializeAsync(IRoslynHost roslynHost, IClassificationHighlightColors highlightColors, string workingDirectory, string documentText, SourceCodeKind sourceCodeKind, bool preserveUndoStack = false)
+     {
+         _roslynHost = roslynHost ?? throw new ArgumentNullException(nameof(roslynHost));
+         _classificationHighlightColors = highlightColors ?? throw new ArgumentNullException(nameof(highlightColors));
+@@ -164,7 +169,10 @@ public class RoslynCodeEditor : CodeTextEditor
+         TextArea.IndentationStrategy = new RoslynIndentationStrategy(roslynHost, _documentId);
+ 
+         AppendText(documentText);
+-        Document.UndoStack.ClearAll();
++        if (!preserveUndoStack)
++        {
++            Document.UndoStack.ClearAll();
++        }
+         AsyncToolTipRequest = OnAsyncToolTipRequest;
+ 
+         _contextActionsRenderer = new ContextActionsRenderer(this, _textMarkerService) { IconImage = ContextActionsIcon };

@@ -51,7 +51,7 @@ public sealed partial class ScriptEditorView : UserControl
 
     RoslynCodeEditor CreateCode()
     {
-        var editor = new RoslynCodeEditor
+        var editor = new RoslynCodeEditor(Plain.Document)
         {
             Name = "Code",
             Classes = { "script" },
@@ -134,7 +134,8 @@ public sealed partial class ScriptEditorView : UserControl
             _roslyn = host;
             void CreateDocument(object? sender, CreatingDocumentEventArgs args)
             {
-                _roslyn_text = new AvalonEditTextContainer(Plain.Document) { Editor = Plain };
+                _roslyn_text = args.TextContainer;
+                _roslyn_text.Editor = Plain;
                 _roslyn_document = host.AddDocument(new DocumentCreationArgs(
                     _roslyn_text, hosts.WorkingDirectory, SourceCodeKind.Script,
                     _roslyn_text.UpdateText));
@@ -147,7 +148,7 @@ public sealed partial class ScriptEditorView : UserControl
                 code.CreatingDocument += CreateDocument;
                 Directory.CreateDirectory(hosts.WorkingDirectory);
                 Code.TextArea.SelectionCornerRadius = 2;
-                _ = await Code.InitializeAsync(host, ThemeColors(), hosts.WorkingDirectory, "", SourceCodeKind.Script);
+                _ = await Code.InitializeAsync(host, ThemeColors(), hosts.WorkingDirectory, "", SourceCodeKind.Script, preserveUndoStack: true);
                 if (_released || document.IsClosed)
                     return;
                 if (Code.CompletionProvider is { } completions)
@@ -158,7 +159,6 @@ public sealed partial class ScriptEditorView : UserControl
                 int length = Plain.SelectionLength;
                 double horizontal = Plain.HorizontalOffset;
                 double vertical = Plain.VerticalOffset;
-                Code.Document = Plain.Document;
                 _roslyn_text!.Editor = Code;
                 Adopt(Code);
                 Code.Select(selection, length);
