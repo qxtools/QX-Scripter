@@ -23,6 +23,7 @@ namespace Qx.Desktop.Views.Editor;
 public sealed partial class ScriptEditorView : UserControl
 {
     readonly UiDirectiveColorizer _directives;
+    readonly Border _action_space = new() { Width = 16, Margin = new Thickness(0, 0, 5, 0) };
     RoslynHostProvider? _hosts;
     EditorPreferences? _preferences;
     ScriptDocument? _document;
@@ -39,6 +40,7 @@ public sealed partial class ScriptEditorView : UserControl
     public ScriptEditorView()
     {
         InitializeComponent();
+        Plain.TextArea.LeftMargins.Insert(Plain.TextArea.LeftMargins.Count - 1, _action_space);
         _directives = new UiDirectiveColorizer(DirectiveBrush);
         ActualThemeVariantChanged += OnThemeChanged;
     }
@@ -221,6 +223,11 @@ public sealed partial class ScriptEditorView : UserControl
         {
             if (margin is LineNumberMargin)
                 margin.Margin = new Thickness(8, 0, 0, 0);
+            else if (margin is MarkerMargin)
+            {
+                margin.Width = _action_space.Width;
+                margin.Margin = _action_space.Margin;
+            }
         }
         editor.AddHandler(PointerWheelChangedEvent, OnWheel, RoutingStrategies.Tunnel);
         editor.ContextMenu = EditMenu(editor);
