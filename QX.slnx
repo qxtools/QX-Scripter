@@ -3,4 +3,7 @@
   <Project Path="src/QX.Presentation/QX.Presentation.csproj" />
   <Project Path="src/QX.Desktop/QX.Desktop.csproj" />
   <Project Path="src/QX.App/QX.App.csproj" />
+  <Folder Name="/vendor/">
+    <Project Path="vendor/RoslynPad.Editor.Avalonia/RoslynPad.Editor.Avalonia.csproj" />
+  </Folder>
 </Solution>

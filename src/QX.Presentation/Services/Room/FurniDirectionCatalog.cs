@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Xml.Linq;
 using Flazzy.Tags;
 using Flazzy;
+using Qx.Presentation.Threading;
 
 namespace Qx.Presentation.Services.Room;
 
@@ -34,13 +35,20 @@ public sealed class FurniDirectionCatalog : IFurniDirections, IDisposable
             return [];
         string name = identifier.Replace('*', '_');
         string key = $"{revision}/{name}";
-        Task<IReadOnlyList<int>> pending = _cache.GetOrAdd(key, _ => DownloadAsync(revision, name, key));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!_cache.TryGetValue(key, out Task<IReadOnlyList<int>>? pending))
+        {
+            var created = new TaskCompletionSource<IReadOnlyList<int>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            pending = _cache.GetOrAdd(key, created.Task);
+            if (ReferenceEquals(pending, created.Task))
+                DownloadAsync(revision, name, key, created).Observe("furni-directions");
+        }
         return await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose() => _http.Dispose();
 
-    async Task<IReadOnlyList<int>> DownloadAsync(int revision, string identifier, string key)
+    async Task DownloadAsync(int revision, string identifier, string key, TaskCompletionSource<IReadOnlyList<int>> pending)
     {
         try
         {
@@ -48,12 +56,15 @@ public sealed class FurniDirectionCatalog : IFurniDirections, IDisposable
             byte[] data = await _http
                 .GetByteArrayAsync($"https://images.habbo.com/dcr/hof_furni/{revision}/{escaped}.swf")
                 .ConfigureAwait(false);
-            return Read(data);
+            pending.TrySetResult(Read(data));
         }
-        catch (Exception error) when (error is not OutOfMemoryException)
+        catch (Exception error)
         {
             _cache.TryRemove(key, out _);
-            return [];
+            if (error is OutOfMemoryException)
+                pending.TrySetException(error);
+            else
+                pending.TrySetResult([]);
         }
     }
 

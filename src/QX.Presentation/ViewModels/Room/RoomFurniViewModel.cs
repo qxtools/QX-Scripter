@@ -550,7 +550,8 @@ public sealed partial class RoomFurniViewModel : ViewModelBase
         foreach (string stale in _stacks.Keys.Where(key => !seen.Contains(key)).ToArray())
             _stacks.Remove(stale);
         wanted.Sort(StackOrder);
-        Stacks.ReplaceAll(wanted);
+        if (!wanted.SequenceEqual(Stacks, ReferenceEqualityComparer.Instance))
+            Stacks.ReplaceAll(wanted);
         StackSelection.Prune(wanted);
     }
 

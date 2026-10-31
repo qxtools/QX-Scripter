@@ -1,17 +1,11 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Scripting;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis;
 using Qx.Protocol;
 using Qx.Scripting.Hosting;
 using Qx.Scripting;
-using RoslynPad.Roslyn.BraceMatching;
-using RoslynPad.Roslyn.Formatting;
-using RoslynPad.Roslyn.QuickInfo;
-using RoslynPad.Roslyn.Structure;
 using RoslynPad.Roslyn;
 
 namespace Qx.Desktop.Editor;
@@ -33,36 +27,6 @@ public sealed class QxRoslynHost : RoslynHost
                 imports: ScriptEngine.Imports))
     {
         _script_analyzer = new AnalyzerImageReference([ScriptEngine.CreateAnalyzer(messages)]);
-    }
-
-    /// <summary>
-    /// Opens a throwaway script and asks it for what an editor asks when a tab first opens, so the
-    /// composition parts, the reference metadata and the compiler paths are built here, off the UI
-    /// thread, rather than while the first real tab stalls it.
-    /// </summary>
-    public async Task WarmUpAsync(string workingDirectory)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
-        DocumentId id = AddDocument(new DocumentCreationArgs(
-            SourceText.From("var items = FloorItems.Where(item => item.Id > 0).ToList();\nLog(items.Count);\n").Container,
-            workingDirectory,
-            SourceCodeKind.Script));
-        try
-        {
-            _ = GetService<IQuickInfoProvider>();
-            _ = GetService<IBraceMatchingService>();
-            if (GetDocument(id) is not { } document)
-                return;
-            _ = document.GetLanguageService<ICodeFormattingService>();
-            if (document.GetLanguageService<IBlockStructureService>() is { } structure)
-                _ = await structure.GetBlockStructureAsync(document).ConfigureAwait(false);
-            SourceText text = await document.GetTextAsync().ConfigureAwait(false);
-            _ = await Classifier.GetClassifiedSpansAsync(document, new TextSpan(0, text.Length)).ConfigureAwait(false);
-        }
-        finally
-        {
-            CloseDocument(id);
-        }
     }
 
     protected override IEnumerable<AnalyzerReference> GetSolutionAnalyzerReferences() =>

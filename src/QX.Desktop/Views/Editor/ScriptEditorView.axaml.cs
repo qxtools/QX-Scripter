@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -32,6 +33,8 @@ public sealed partial class ScriptEditorView : UserControl
     bool _initializing;
     QxRoslynHost? _roslyn;
     DocumentId? _roslyn_document;
+    AvalonEditTextContainer? _roslyn_text;
+    RoslynCodeEditor? _code;
 
     public ScriptEditorView()
     {
@@ -41,6 +44,27 @@ public sealed partial class ScriptEditorView : UserControl
     }
 
     public TextEditor? Surface => _surface;
+
+    RoslynCodeEditor Code => _code ??= CreateCode();
+
+    RoslynCodeEditor CreateCode()
+    {
+        var editor = new RoslynCodeEditor
+        {
+            Name = "Code",
+            Classes = { "script" },
+            IsVisible = false,
+            IsReadOnly = true,
+            ShowLineNumbers = true,
+            IsCodeFoldingEnabled = false,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            FontSize = _preferences?.FontSize ?? EditorPreferences.DefaultFontSize,
+            WordWrap = _preferences?.WordWrap ?? false
+        };
+        Editors.Children.Add(editor);
+        return editor;
+    }
 
     public void Use(ScriptDocument document, RoslynHostProvider hosts, EditorPreferences preferences)
     {
@@ -53,6 +77,9 @@ public sealed partial class ScriptEditorView : UserControl
         DataContext = document;
         Apply(preferences);
         preferences.PropertyChanged += OnPreferencesChanged;
+        Plain.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("C#");
+        Plain.Document = new AvaloniaEdit.Document.TextDocument(document.Text);
+        Adopt(Plain);
     }
 
     public void Release()
@@ -105,22 +132,40 @@ public sealed partial class ScriptEditorView : UserControl
             _roslyn = host;
             void CreateDocument(object? sender, CreatingDocumentEventArgs args)
             {
+                _roslyn_text = new AvalonEditTextContainer(Plain.Document) { Editor = Plain };
                 _roslyn_document = host.AddDocument(new DocumentCreationArgs(
-                    args.TextContainer, hosts.WorkingDirectory, SourceCodeKind.Script,
-                    args.TextContainer.UpdateText));
+                    _roslyn_text, hosts.WorkingDirectory, SourceCodeKind.Script,
+                    _roslyn_text.UpdateText));
                 args.DocumentId = _roslyn_document;
             }
-            Code.CreatingDocument += CreateDocument;
+            RoslynCodeEditor? code = null;
             try
             {
+                code = Code;
+                code.CreatingDocument += CreateDocument;
                 Directory.CreateDirectory(hosts.WorkingDirectory);
                 Code.TextArea.SelectionCornerRadius = 2;
-                _ = await Code.InitializeAsync(host, ThemeColors(), hosts.WorkingDirectory, document.Text, SourceCodeKind.Script);
+                _ = await Code.InitializeAsync(host, ThemeColors(), hosts.WorkingDirectory, "", SourceCodeKind.Script);
                 if (_released || document.IsClosed)
                     return;
                 if (Code.CompletionProvider is { } completions)
                     Code.CompletionProvider = new GuardedCompletionProvider(new UiDirectiveCompletionProvider(completions, Code), Code);
+                bool focused = Plain.IsKeyboardFocusWithin;
+                int caret = Plain.CaretOffset;
+                int selection = Plain.SelectionStart;
+                int length = Plain.SelectionLength;
+                double horizontal = Plain.HorizontalOffset;
+                double vertical = Plain.VerticalOffset;
+                Code.Document = Plain.Document;
+                _roslyn_text!.Editor = Code;
                 Adopt(Code);
+                Code.Select(selection, length);
+                Code.CaretOffset = caret;
+                Code.ScrollToHorizontalOffset(horizontal);
+                Code.ScrollToVerticalOffset(vertical);
+                if (focused)
+                    Code.TextArea.Focus();
+                Plain.IsVisible = false;
                 return;
             }
             catch (Exception error) when (error is not OutOfMemoryException)
@@ -130,7 +175,8 @@ public sealed partial class ScriptEditorView : UserControl
             }
             finally
             {
-                Code.CreatingDocument -= CreateDocument;
+                if (code is not null)
+                    code.CreatingDocument -= CreateDocument;
                 _initializing = false;
                 if (_released || document.IsClosed)
                     CloseDocument();
@@ -138,19 +184,18 @@ public sealed partial class ScriptEditorView : UserControl
         }
         if (_released || document.IsClosed)
             return;
-        Plain.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("C#");
-        Plain.Document = new AvaloniaEdit.Document.TextDocument(document.Text);
         Fallback.Notice = new Notice(NoticeSeverity.Warning, "Code completion is unavailable. Scripts still run.", DateTimeOffset.UtcNow);
         Fallback.IsVisible = true;
-        Code.IsVisible = false;
-        Plain.IsVisible = true;
-        Adopt(Plain);
+        if (_code is { } advanced)
+            advanced.IsVisible = false;
     }
 
     void CloseDocument()
     {
         if (_roslyn_document is { } id)
             _roslyn?.CloseDocument(id);
+        _roslyn_text?.Dispose();
+        _roslyn_text = null;
         _roslyn_document = null;
         _roslyn = null;
     }
@@ -159,12 +204,17 @@ public sealed partial class ScriptEditorView : UserControl
     {
         if (_document is not { } document)
             return;
-        Loading.IsVisible = false;
-        _surface = editor;
+        if (_surface is { } previous)
+        {
+            previous.RemoveHandler(PointerWheelChangedEvent, OnWheel);
+            previous.TextArea.TextView.LineTransformers.Remove(_directives);
+        }
+        _buffer?.Dispose();
         editor.Options.ConvertTabsToSpaces = true;
         editor.Options.IndentationSize = 4;
         editor.Options.AllowScrollBelowDocument = true;
         editor.Options.HighlightCurrentLine = false;
+        editor.TextArea.SelectionCornerRadius = 2;
         editor.TextArea.TextView.LineTransformers.Add(_directives);
         editor.TextArea.TextView.Margin = new Thickness(8, 0, 0, 0);
         foreach (Control margin in editor.TextArea.LeftMargins)
@@ -178,6 +228,9 @@ public sealed partial class ScriptEditorView : UserControl
             Apply(preferences);
         _buffer = new EditorBufferAdapter(editor, document);
         document.AttachBuffer(_buffer);
+        _surface = editor;
+        editor.IsReadOnly = false;
+        editor.IsVisible = true;
     }
 
     void OnWheel(object? sender, PointerWheelEventArgs args)
@@ -230,18 +283,21 @@ public sealed partial class ScriptEditorView : UserControl
 
     void Apply(EditorPreferences preferences)
     {
-        Code.FontSize = preferences.FontSize;
-        Code.WordWrap = preferences.WordWrap;
+        if (_code is { } code)
+        {
+            code.FontSize = preferences.FontSize;
+            code.WordWrap = preferences.WordWrap;
+        }
         Plain.FontSize = preferences.FontSize;
         Plain.WordWrap = preferences.WordWrap;
     }
 
     void OnThemeChanged(object? sender, EventArgs args)
     {
-        if (ReferenceEquals(_surface, Code))
+        if (_code is { } code && ReferenceEquals(_surface, code))
         {
-            Code.ClassificationHighlightColors = ThemeColors();
-            Code.TextArea.TextView.Redraw();
+            code.ClassificationHighlightColors = ThemeColors();
+            code.TextArea.TextView.Redraw();
             return;
         }
         _surface?.TextArea.TextView.Redraw();

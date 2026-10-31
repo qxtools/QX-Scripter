@@ -32,7 +32,7 @@ public sealed class DraftStore(IAppPaths paths) : IDraftStore, IDisposable
 {
     readonly string _path = (paths ?? throw new ArgumentNullException(nameof(paths))).DraftsFile;
     readonly SemaphoreSlim _gate = new(1, 1);
-    string _last_written = "";
+    List<Draft>? _saved;
     int _sealed;
 
     public bool IsSealed => Volatile.Read(ref _sealed) != 0;
@@ -63,18 +63,14 @@ public sealed class DraftStore(IAppPaths paths) : IDraftStore, IDisposable
             await ClearAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
-        string json = JsonSerializer.Serialize([.. drafts], DraftJson.Default.ListDraft);
+        List<Draft> snapshot = [.. drafts];
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!IsSealed && !string.Equals(json, _last_written, StringComparison.Ordinal))
-            {
-                string staging = _path + ".tmp";
-                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                await File.WriteAllTextAsync(staging, json, cancellationToken).ConfigureAwait(false);
-                File.Move(staging, _path, overwrite: true);
-                _last_written = json;
-            }
+            if (IsSealed || _saved is not null && snapshot.SequenceEqual(_saved))
+                return;
+            await Task.Run(() => WriteAsync(snapshot, cancellationToken), cancellationToken).ConfigureAwait(false);
+            _saved = snapshot;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -94,8 +90,8 @@ public sealed class DraftStore(IAppPaths paths) : IDraftStore, IDisposable
         {
             if (!IsSealed)
             {
-                _last_written = "";
                 File.Delete(_path);
+                _saved = null;
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -119,15 +115,16 @@ public sealed class DraftStore(IAppPaths paths) : IDraftStore, IDisposable
             if (drafts.Count == 0)
             {
                 File.Delete(_path);
-                _last_written = "";
+                _saved = null;
                 return true;
             }
-            string json = JsonSerializer.Serialize([.. drafts], DraftJson.Default.ListDraft);
+            List<Draft> snapshot = [.. drafts];
             string staging = _path + ".tmp";
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(staging, json);
+            using (var stream = File.Create(staging))
+                JsonSerializer.Serialize(stream, snapshot, DraftJson.Default.ListDraft);
             File.Move(staging, _path, overwrite: true);
-            _last_written = json;
+            _saved = snapshot;
             return true;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -143,4 +140,14 @@ public sealed class DraftStore(IAppPaths paths) : IDraftStore, IDisposable
     public void Seal() => Interlocked.Exchange(ref _sealed, 1);
 
     public void Dispose() => _gate.Dispose();
+
+    async Task WriteAsync(List<Draft> snapshot, CancellationToken cancellation_token)
+    {
+        string staging = _path + ".tmp";
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        await using (var stream = new FileStream(staging, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous))
+            await JsonSerializer.SerializeAsync(stream, snapshot, DraftJson.Default.ListDraft, cancellation_token).ConfigureAwait(false);
+        cancellation_token.ThrowIfCancellationRequested();
+        File.Move(staging, _path, overwrite: true);
+    }
 }

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <RoslynPadRevision>21eb17bcdc29b2a4bd20cf35165f9f3ca8656c5b</RoslynPadRevision>
+    <RoslynPadSource>$(MSBuildThisFileDirectory)artifacts/editor/$(RoslynPadRevision)</RoslynPadSource>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,13 @@
+diff --git a/src/RoslynPad.Editor.Avalonia/CodeTextEditor.Avalonia.cs b/src/RoslynPad.Editor.Avalonia/CodeTextEditor.Avalonia.cs
+index c330967..ad53847 100644
+--- a/src/RoslynPad.Editor.Avalonia/CodeTextEditor.Avalonia.cs
++++ b/src/RoslynPad.Editor.Avalonia/CodeTextEditor.Avalonia.cs
+@@ -12,7 +12,7 @@ public partial class CodeTextEditor
+     {
+         PointerHover += OnMouseHover;
+         PointerExited += OnPointerExited;
+-        KeyDownEvent.AddClassHandler<CodeTextEditor>(OnPreviewKeyDown, RoutingStrategies.Tunnel);
++        AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+ 
+         _searchReplacePanel = SearchPanel.Install(this);
+     }

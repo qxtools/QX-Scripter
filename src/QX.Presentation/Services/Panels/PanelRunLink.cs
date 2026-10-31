@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Qx.Presentation.Threading;
 using Qx.Scripting.Hosting;
 using Qx.Scripting;
@@ -9,7 +8,9 @@ public sealed class PanelRunLink : IDisposable
 {
     readonly PanelDocument _panel;
     readonly ScriptUiHost _host;
-    readonly ConcurrentQueue<Action> _pending = new();
+    readonly Queue<PendingUpdate> _pending = new();
+    readonly Lock _pending_gate = new();
+    PendingUpdate? _tail;
     readonly CoalescingSignal _drain;
     readonly CancellationToken _run_token;
     int _disposed;
@@ -19,7 +20,7 @@ public sealed class PanelRunLink : IDisposable
         _panel = panel;
         _host = ScriptUiHost.Of(ui);
         _run_token = run_token;
-        _drain = new CoalescingSignal(dispatcher, Drain, UiPriority.Normal);
+        _drain = new CoalescingSignal(dispatcher, Drain, UiPriority.Background);
         foreach ((string name, string value) in panel.Values())
             _host.Push(name, value);
         _host.SetClicked(pressed_button);
@@ -72,24 +73,47 @@ public sealed class PanelRunLink : IDisposable
             _host.Push(name, value);
     }
 
-    void Enqueue(Action action)
+    void Enqueue(Action action, string? property = null, string? name = null)
     {
-        if (Volatile.Read(ref _disposed) != 0)
-            return;
-        _pending.Enqueue(action);
+        lock (_pending_gate)
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+                return;
+            if (property is not null && _tail is { } tail && tail.Property == property && tail.Name == name)
+                tail.Action = action;
+            else
+            {
+                _tail = new PendingUpdate(action, property, name);
+                _pending.Enqueue(_tail);
+            }
+        }
         _drain.Raise();
     }
 
     void Drain()
     {
         if (Volatile.Read(ref _disposed) == 0)
-            Apply();
+            Apply(256);
     }
 
-    void Apply()
+    void Apply(int limit = int.MaxValue)
     {
-        while (_pending.TryDequeue(out Action? action))
+        for (int count = 0; count < limit; count++)
+        {
+            Action action;
+            lock (_pending_gate)
+            {
+                if (!_pending.TryDequeue(out PendingUpdate? update))
+                    return;
+                action = update.Action;
+                if (_pending.Count == 0)
+                    _tail = null;
+            }
             action();
+        }
+        lock (_pending_gate)
+            if (_pending.Count > 0)
+                _drain.Raise();
     }
 
     void OnLogged(string box, string text) => Enqueue(() => _panel.AppendOutput(box, text));
@@ -98,19 +122,19 @@ public sealed class PanelRunLink : IDisposable
 
     void OnChanged(string name, string value) => Enqueue(() => _panel.SetFieldValue(name, value));
 
-    void OnProgress(string name, double fraction) => Enqueue(() => _panel.SetProgress(name, fraction));
+    void OnProgress(string name, double fraction) => Enqueue(() => _panel.SetProgress(name, fraction), nameof(OnProgress), name);
 
-    void OnProgressDetail(string name, bool indeterminate, string caption) => Enqueue(() => _panel.SetProgressDetail(name, indeterminate, caption));
+    void OnProgressDetail(string name, bool indeterminate, string caption) => Enqueue(() => _panel.SetProgressDetail(name, indeterminate, caption), nameof(OnProgressDetail), name);
 
     void OnOptions(string name, IReadOnlyList<string> options, string selected) => Enqueue(() => _panel.SetOptions(name, options, selected));
 
-    void OnValidation(string name, string message) => Enqueue(() => _panel.SetValidation(name, message));
+    void OnValidation(string name, string message) => Enqueue(() => _panel.SetValidation(name, message), nameof(OnValidation), name);
 
-    void OnStatus(string name, string text) => Enqueue(() => _panel.SetStatus(name, text));
+    void OnStatus(string name, string text) => Enqueue(() => _panel.SetStatus(name, text), nameof(OnStatus), name);
 
-    void OnEnabled(string name, bool enabled) => Enqueue(() => _panel.SetEnabled(name, enabled));
+    void OnEnabled(string name, bool enabled) => Enqueue(() => _panel.SetEnabled(name, enabled), nameof(OnEnabled), name);
 
-    void OnVisibility(string name, bool visible) => Enqueue(() => _panel.SetVisible(name, visible));
+    void OnVisibility(string name, bool visible) => Enqueue(() => _panel.SetVisible(name, visible), nameof(OnVisibility), name);
 
     void OnRowAdded(string table, IReadOnlyList<string> cells) => Enqueue(() => _panel.AddRow(table, cells));
 
@@ -118,7 +142,7 @@ public sealed class PanelRunLink : IDisposable
 
     void OnToasted(string text, bool problem) => Enqueue(() => _panel.Toast(text, problem));
 
-    void OnBusy(string button, bool busy) => Enqueue(() => _panel.SetButtonBusy(button, busy));
+    void OnBusy(string button, bool busy) => Enqueue(() => _panel.SetButtonBusy(button, busy), nameof(OnBusy), button);
 
     void OnDownloaded(string file_name, string content) =>
         Enqueue(() => _panel.DownloadAsync(file_name, content, _run_token).Observe("scripts"));
@@ -128,4 +152,11 @@ public sealed class PanelRunLink : IDisposable
 
     Task<string?> OnPromptAsync(string title, string initial) =>
         Volatile.Read(ref _disposed) != 0 ? Task.FromResult<string?>(null) : _panel.PromptAsync(title, initial, _run_token);
+
+    sealed class PendingUpdate(Action action, string? property, string? name)
+    {
+        public Action Action = action;
+        public readonly string? Property = property;
+        public readonly string? Name = name;
+    }
 }

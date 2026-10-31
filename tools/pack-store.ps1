@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'prepare-editor.ps1')
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $framework_version = ([xml][IO.File]::ReadAllText((Join-Path $root 'Framework.props'))).Project.PropertyGroup.QxFrameworkVersion
 $output = [IO.Path]::GetFullPath($output)

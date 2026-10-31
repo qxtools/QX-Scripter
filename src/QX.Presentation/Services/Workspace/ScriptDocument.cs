@@ -14,6 +14,8 @@ public interface IScriptTextBuffer
 {
     string Text { get; }
 
+    string HeaderText => Text;
+
     void Replace(string text);
 
     void Insert(string text, int caretOffset);
@@ -304,7 +306,7 @@ public sealed partial class ScriptDocument : ObservableObject, IRunSource, IDisp
 
     void RefreshName()
     {
-        if (ScriptFileName.FromDirective(Text) is { } directive)
+        if (ScriptFileName.FromDirective(_buffer?.HeaderText ?? _text) is { } directive)
             Name = directive;
         else if (FilePath is { } path)
             Name = ScriptFileName.NameOf(path);

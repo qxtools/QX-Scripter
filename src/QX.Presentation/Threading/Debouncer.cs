@@ -9,6 +9,8 @@ public sealed class Debouncer : IDisposable
     readonly Lock _gate = new();
     ITimer? _timer;
     long _armed;
+    long _last_triggered;
+    bool _scheduled;
     bool _disposed;
 
     public Debouncer(IUiDispatcher dispatcher, TimeProvider time, TimeSpan delay, Action apply)
@@ -27,6 +29,8 @@ public sealed class Debouncer : IDisposable
             if (_disposed)
                 return;
             _armed++;
+            _last_triggered = _time.GetTimestamp();
+            _scheduled = true;
             _timer ??= _time.CreateTimer(static state => ((Debouncer)state!).Elapse(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _timer.Change(_delay, Timeout.InfiniteTimeSpan);
         }
@@ -37,6 +41,7 @@ public sealed class Debouncer : IDisposable
         lock (_gate)
         {
             _armed++;
+            _scheduled = false;
             _timer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         }
     }
@@ -48,6 +53,7 @@ public sealed class Debouncer : IDisposable
             if (_disposed)
                 return;
             _armed++;
+            _scheduled = false;
             _timer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         }
         _apply();
@@ -68,8 +74,14 @@ public sealed class Debouncer : IDisposable
         long armed;
         lock (_gate)
         {
-            if (_disposed)
+            if (_disposed || !_scheduled)
                 return;
+            TimeSpan remaining = _delay - _time.GetElapsedTime(_last_triggered);
+            if (remaining > TimeSpan.Zero)
+            {
+                _timer?.Change(remaining, Timeout.InfiniteTimeSpan);
+                return;
+            }
             armed = _armed;
         }
         _dispatcher.Post(() => Apply(armed), UiPriority.Background);
@@ -79,8 +91,9 @@ public sealed class Debouncer : IDisposable
     {
         lock (_gate)
         {
-            if (_disposed || armed != _armed)
+            if (_disposed || !_scheduled || armed != _armed)
                 return;
+            _scheduled = false;
         }
         _apply();
     }

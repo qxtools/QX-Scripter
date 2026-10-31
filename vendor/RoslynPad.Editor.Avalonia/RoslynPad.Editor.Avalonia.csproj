@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../Editor.props" />
+  <PropertyGroup>
+    <RootNamespace>RoslynPad.Editor</RootNamespace>
+    <Version>5.0.0</Version>
+    <DefineConstants>$(DefineConstants);AVALONIA</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <PackageReference Include="System.Reactive.Linq" Version="6.1.0" />
+    <PackageReference Include="RoslynPad.Roslyn.Avalonia" Version="5.0.0" />
+    <PackageReference Include="RoslynPad.Roslyn" Version="5.0.0" />
+    <PackageReference Include="RoslynPad.Themes" Version="5.0.0" />
+    <Compile Include="$(RoslynPadSource)/src/RoslynPad.Editor.Avalonia/*.cs" />
+    <Compile Include="$(RoslynPadSource)/src/RoslynPad.Editor.Windows/Shared/**/*.cs" />
+    <EmbeddedResource Include="$(RoslynPadSource)/src/RoslynPad.Editor.Windows/Shared/**/*.json">
+      <Link>Shared/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Target Name="RequireEditorSource" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(RoslynPadSource)/.qx-prepared')" Text="Run tools/prepare-editor.ps1 before building the desktop editor." />
+  </Target>
+</Project>

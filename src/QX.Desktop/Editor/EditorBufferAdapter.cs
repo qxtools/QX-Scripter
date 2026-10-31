@@ -20,6 +20,26 @@ public sealed class EditorBufferAdapter : IScriptTextBuffer, IDisposable
 
     public string Text => _editor.Document?.Text ?? "";
 
+    public string HeaderText
+    {
+        get
+        {
+            if (_editor.Document is not { } document)
+                return "";
+            foreach (DocumentLine line in document.Lines)
+            {
+                int offset = line.Offset;
+                while (offset < line.EndOffset && char.IsWhiteSpace(document.GetCharAt(offset)))
+                    offset++;
+                if (offset == line.EndOffset)
+                    continue;
+                if (document.GetCharAt(offset) != '/' || offset + 1 == line.EndOffset || document.GetCharAt(offset + 1) != '/')
+                    return document.GetText(0, line.Offset);
+            }
+            return document.Text;
+        }
+    }
+
     public void Replace(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

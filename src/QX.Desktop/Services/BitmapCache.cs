@@ -28,6 +28,8 @@ public sealed class BitmapCache(IImageService images, TimeProvider? time = null)
                 _memory.Remove(url);
                 return null;
             }
+            _recent.Remove(entry.Node);
+            _recent.AddFirst(entry.Node);
             return entry.Image;
         }
     }

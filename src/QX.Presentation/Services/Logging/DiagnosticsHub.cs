@@ -24,7 +24,8 @@ public sealed class DiagnosticsHub : IApplicationLog, IDisposable
     readonly Mutex? _file_lock;
     readonly BlockingCollection<string> _lines = new(new ConcurrentQueue<string>());
     readonly ConcurrentQueue<Action> _flushes = new();
-    readonly ConcurrentQueue<LogEntry> _pending = new();
+    readonly Queue<LogEntry> _pending = new();
+    readonly Lock _pending_gate = new();
     readonly ObservableCollection<LogEntry> _entries = [];
     readonly InterceptFailureLog _intercepts = new();
     readonly Thread _writer;
@@ -98,6 +99,8 @@ public sealed class DiagnosticsHub : IApplicationLog, IDisposable
 
     public void Clear()
     {
+        lock (_pending_gate)
+            _pending.Clear();
         _entries.Clear();
         Cleared?.Invoke();
     }
@@ -126,7 +129,12 @@ public sealed class DiagnosticsHub : IApplicationLog, IDisposable
         DateTime now = DateTime.Now;
         string tag = category is null ? "" : category + " ";
         Offer($"[{now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}] {level} {tag}{message}{Environment.NewLine}");
-        _pending.Enqueue(new LogEntry(Interlocked.Increment(ref _sequence), now, level, category, message));
+        lock (_pending_gate)
+        {
+            _pending.Enqueue(new LogEntry(++_sequence, now, level, category, message));
+            while (_pending.Count > Capacity)
+                _pending.Dequeue();
+        }
         _drain?.Raise();
     }
 
@@ -145,8 +153,11 @@ public sealed class DiagnosticsHub : IApplicationLog, IDisposable
     void Drain()
     {
         List<LogEntry> batch = [];
-        while (_pending.TryDequeue(out LogEntry? entry))
-            batch.Add(entry);
+        lock (_pending_gate)
+        {
+            while (_pending.TryDequeue(out LogEntry? entry))
+                batch.Add(entry);
+        }
         if (batch.Count == 0)
             return;
         foreach (LogEntry entry in batch)

@@ -13,7 +13,7 @@ public sealed class RoomSnapshotSource : IRoomSnapshotSource, IDisposable
     public static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(250);
 
     readonly IGameGateway _gateway;
-    readonly Debouncer _settle;
+    readonly ThrottledSignal _settle;
     bool _attached;
     bool _disposed;
 
@@ -22,7 +22,11 @@ public sealed class RoomSnapshotSource : IRoomSnapshotSource, IDisposable
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(time);
-        _settle = new Debouncer(dispatcher, time, SettleDelay, Refresh);
+        _settle = new ThrottledSignal(dispatcher, time, SettleDelay, () =>
+        {
+            if (_attached)
+                Refresh();
+        });
     }
 
     public RoomSnapshot Current { get; private set; } = RoomSnapshot.Empty;
@@ -44,13 +48,12 @@ public sealed class RoomSnapshotSource : IRoomSnapshotSource, IDisposable
             return;
         _attached = false;
         Detach();
-        _settle.Cancel();
     }
 
     public void Settle()
     {
         if (!_disposed && _attached)
-            _settle.Trigger();
+            _settle.Raise();
     }
 
     public void Refresh()

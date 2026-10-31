@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 & (Join-Path $PSScriptRoot 'prepare-docs.ps1')
+& (Join-Path $PSScriptRoot 'prepare-editor.ps1')
 $solution = Join-Path $PSScriptRoot '../QX.slnx'
 & dotnet restore $solution --locked-mode --disable-build-servers
 if ($LASTEXITCODE -ne 0) { throw 'Scripter package restore failed.' }

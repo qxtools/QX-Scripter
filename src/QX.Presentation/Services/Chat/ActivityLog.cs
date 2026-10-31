@@ -16,9 +16,10 @@ public sealed class ActivityLog : IAlwaysOn, IDisposable
     readonly TimeProvider _time;
     readonly List<ActivityEntry> _entries = [];
     readonly Dictionary<int, (Id UserId, bool Active)> _trades = [];
+    readonly Lock _trade_gate = new();
     long _trade_generation = -1;
     long _sequence;
-    bool _disposed;
+    volatile bool _disposed;
 
     public ActivityLog(IGameGateway gateway, IUiDispatcher dispatcher, TimeProvider time)
     {
@@ -158,40 +159,45 @@ public sealed class ActivityLog : IAlwaysOn, IDisposable
         string name = user.Name;
         int index = user.Index;
         Id id = user.Id;
+        lock (_trade_gate)
+            if (_trades.TryGetValue(index, out var trade) && trade.UserId == id)
+                _trades.Remove(index);
         DateTimeOffset at = _time.GetUtcNow();
         _dispatcher.Post(() =>
         {
             if (_disposed)
                 return;
-            if (_trades.TryGetValue(index, out var trade) && trade.UserId == id)
-                _trades.Remove(index);
             Leave(name, at);
         });
     }
 
     void OnAvatarUpdated(Avatar avatar)
     {
-        if (avatar is not User || avatar.CurrentUpdate is not { } status)
+        if (_disposed || avatar is not User || avatar.CurrentUpdate is not { } status)
             return;
         (long generation, bool ready) = _gateway.Game.Room.Capture(room => (room.Generation, room.IsReady));
         int index = avatar.Index;
         Id id = avatar.Id;
-        string name = avatar.Name;
         bool active = status.IsTrading;
-        DateTimeOffset at = _time.GetUtcNow();
-        _dispatcher.Post(() =>
+        bool changed;
+        lock (_trade_gate)
         {
-            if (_disposed)
-                return;
             if (_trade_generation != generation)
             {
                 _trades.Clear();
                 _trade_generation = generation;
             }
-            bool changed = _trades.TryGetValue(index, out var previous) &&
+            changed = _trades.TryGetValue(index, out var previous) &&
                 previous.UserId == id && previous.Active != active;
             _trades[index] = (id, active);
-            if (ready && changed)
+        }
+        if (!ready || !changed)
+            return;
+        string name = avatar.Name;
+        DateTimeOffset at = _time.GetUtcNow();
+        _dispatcher.Post(() =>
+        {
+            if (!_disposed)
                 Add(new ActivityEntry(++_sequence, at, ActivityKind.Trade,
                     $"{name} {(active ? "started" : "stopped")} trading", generation, 0));
         });

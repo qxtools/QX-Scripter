@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($edition -eq 'Desktop') { & (Join-Path $PSScriptRoot 'prepare-editor.ps1') }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $output = [IO.Path]::GetFullPath($output)
 $name = "QX-Scripter-$edition-$runtime"

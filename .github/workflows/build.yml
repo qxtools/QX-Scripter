@@ -54,7 +54,10 @@ jobs:
         run: ./tools/prepare-docs.ps1
 
       - name: Restore solution
-        run: dotnet restore QX.slnx --locked-mode --disable-build-servers
+        shell: pwsh
+        run: |
+          ./tools/prepare-editor.ps1
+          dotnet restore QX.slnx --locked-mode --disable-build-servers
 
       - name: Package Desktop
         shell: pwsh

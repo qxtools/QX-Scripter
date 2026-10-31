@@ -7,3 +7,4 @@
 *.zip binary
 src/QX.Protocol/Resources/messages.ini text eol=lf
 src/QX.Protocol/Msg.cs text eol=crlf
+*.patch -whitespace
