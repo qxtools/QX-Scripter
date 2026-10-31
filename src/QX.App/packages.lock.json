@@ -4,23 +4,23 @@
     "net10.0": {
       "QX": {
         "type": "Direct",
-        "requested": "[0.1.4, )",
-        "resolved": "0.1.4",
-        "contentHash": "ABj9pynrYqlnicvXJioGUzhiHJX9akrD+5A5io0U+zDYNwYCcZy90LLUHVjX8ZFlFhU3KxydRFKUuEfC08NWZg==",
+        "requested": "[0.1.5, )",
+        "resolved": "0.1.5",
+        "contentHash": "+1i3Th66eRecaMfreiBIL6ii+lSgT44QLwbZrn6jbfT828IQNKLQ56cJts5H3iF+h2710ybL+t18EjU15oNqgw==",
         "dependencies": {
           "NodaTime": "3.3.5",
-          "QX.Core": "0.1.4",
+          "QX.Core": "0.1.5",
           "SharpCompress": "0.50.0"
         }
       },
       "QX.Scripting": {
         "type": "Direct",
-        "requested": "[0.1.4, )",
-        "resolved": "0.1.4",
-        "contentHash": "iURWyAY10nZkMva0u5f78xf8xruCeRQ2blAoAg9jJYx4ySb/caBgc4BiHOMGIP933r+mDb6pgPCGxNswRxnvFw==",
+        "requested": "[0.1.5, )",
+        "resolved": "0.1.5",
+        "contentHash": "y/a2e418M3XWGsH3cp6B2pCNN34xI1bhTiu8wlUXWbYjnfy4Fz3wcthIT7uzr3sU2jt3qY77LDZJF0IoRqA6Ow==",
         "dependencies": {
           "Microsoft.CodeAnalysis.CSharp.Scripting": "5.3.0",
-          "QX": "0.1.4"
+          "QX": "0.1.5"
         }
       },
       "Microsoft.CodeAnalysis.Analyzers": {
@@ -72,15 +72,15 @@
       },
       "QX.Core": {
         "type": "Transitive",
-        "resolved": "0.1.4",
-        "contentHash": "w975AcZaPKmz7Hk9zqLC2JnCXhLrZetNy1EYUxl3+v/p0LYtE0rl28D2zLLOTB9rTXfh+0rh4dQorlK61+5D8A=="
+        "resolved": "0.1.5",
+        "contentHash": "RzIhk2gyQ8Mec8agO+P2+E7E+gC3CyCINO4O6/Srnn9tSD5yXqhVW7rSNNT4Rpjy5bSxzGpZcA9QBx+1AvpeCg=="
       },
       "QX.Mcp": {
         "type": "Transitive",
-        "resolved": "0.1.4",
-        "contentHash": "MpgGdziBPpTXj/u/mAVHU8qKspZoBswiM+fC8Psa63L8OeC39PQg3x5+UUVSq+/5espCe89G5wmOWseYtdmmzQ==",
+        "resolved": "0.1.5",
+        "contentHash": "5V8wzlCsy+k5+4iFHp1/h9SdnHTxSnk5cEjFCqg2JKPVL+8rNerBhyqfkRZkuVGkBPJqfJfPd8Zw+Yk7FjNqIA==",
         "dependencies": {
-          "QX": "0.1.4"
+          "QX": "0.1.5"
         }
       },
       "SharpCompress": {
@@ -91,9 +91,9 @@
       "qx.scripter": {
         "type": "Project",
         "dependencies": {
-          "QX": "[0.1.4, )",
-          "QX.Mcp": "[0.1.4, )",
-          "QX.Scripting": "[0.1.4, )"
+          "QX": "[0.1.5, )",
+          "QX.Mcp": "[0.1.5, )",
+          "QX.Scripting": "[0.1.5, )"
         }
       }
     },
